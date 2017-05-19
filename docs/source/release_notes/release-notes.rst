@@ -55,6 +55,19 @@ develop
            There is no issue with having tables with different values for ``gc_grace_seconds``, and this can be updated at any time.
            (`Pull Request <https://github.com/palantir/atlasdb/pull/1726>`__)
 
+    *    - |devbreak|
+         - Removed unused classes.
+
+              - ``FutureClosableIteratorTask``
+              - ``ClosableMergedIterator``
+              - ``KvTableMappingService``
+              - ``ThrowingKeyValueService``
+              - ``RateLimitedTimestampService``
+
+           Even though these classes were not used by Palantir, they might be used by an external consumer. If any issues arise from this change, please contact the development team and we can revert this change.
+           (`Pull Request <https://github.com/palantir/atlasdb/pull/1933>`__)
+
+
 ======
 0.41.0
 ======

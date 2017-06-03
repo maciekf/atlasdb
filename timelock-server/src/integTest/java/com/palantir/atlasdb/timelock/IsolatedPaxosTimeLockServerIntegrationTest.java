@@ -49,47 +49,34 @@ import io.dropwizard.testing.ResourceHelpers;
 public class IsolatedPaxosTimeLockServerIntegrationTest {
     private static final String CLIENT = "isolated";
 
-    private static final Optional<SSLSocketFactory> NO_SSL = Optional.absent();
-
-    private static final File TIMELOCK_CONFIG_TEMPLATE =
-            new File(ResourceHelpers.resourceFilePath("paxosThreeServers.yml"));
-
-    private static final TemporaryFolder TEMPORARY_FOLDER = new TemporaryFolder();
-    private static final TemporaryConfigurationHolder TEMPORARY_CONFIG_HOLDER =
-            new TemporaryConfigurationHolder(TEMPORARY_FOLDER, TIMELOCK_CONFIG_TEMPLATE);
-    private static final TimeLockServerHolder TIMELOCK_SERVER_HOLDER =
-            new TimeLockServerHolder(TEMPORARY_CONFIG_HOLDER::getTemporaryConfigFileLocation);
+    private static final TestableTimelockCluster CLUSTER = new TestableTimelockCluster("paxosThreeServers.yml");
+    private static final TestableTimelockServer SERVER = CLUSTER.servers().get(0);
 
     @ClassRule
-    public static final RuleChain ruleChain = RuleChain.outerRule(TEMPORARY_FOLDER)
-            .around(TEMPORARY_CONFIG_HOLDER)
-            .around(TIMELOCK_SERVER_HOLDER);
+    public static final RuleChain ruleChain = CLUSTER.getRuleChain();
 
     @Test
     public void cannotIssueTimestampsWithoutQuorum() {
-        assertThatThrownBy(() -> getTimestampService(CLIENT).getFreshTimestamp())
+        assertThatThrownBy(() -> SERVER.getFreshTimestamp())
                 .satisfies(this::isRetryableExceptionWhereLeaderCannotBeFound);
     }
 
     @Test
     public void cannotIssueLocksWithoutQuorum() {
-        assertThatThrownBy(() -> getLockService(CLIENT).currentTimeMillis())
+        assertThatThrownBy(() -> SERVER.lockService().currentTimeMillis())
                 .satisfies(this::isRetryableExceptionWhereLeaderCannotBeFound);
     }
 
     @Test
     public void cannotPerformTimestampManagementWithoutQuorum() {
-        assertThatThrownBy(() -> getTimestampManagementService(CLIENT).fastForwardTimestamp(1000L))
+        assertThatThrownBy(() -> SERVER.timestampManagementService().fastForwardTimestamp(1000L))
                 .satisfies(this::isRetryableExceptionWhereLeaderCannotBeFound);
     }
 
+
     @Test
     public void canPingWithoutQuorum() {
-        PingableLeader leader = AtlasDbHttpClients.createProxy(
-                NO_SSL,
-                "http://localhost:" + TIMELOCK_SERVER_HOLDER.getTimelockPort(),
-                PingableLeader.class);
-        leader.ping(); // should succeed
+        SERVER.leaderPing(); // should succeed
     }
 
     @Test
@@ -109,37 +96,15 @@ public class IsolatedPaxosTimeLockServerIntegrationTest {
                 .hasMessageContaining("method invoked on a non-leader");
     }
 
-    private static RemoteLockService getLockService(String client) {
-        return getProxyForService(client, RemoteLockService.class);
-    }
-
-    private static TimestampService getTimestampService(String client) {
-        return getProxyForService(client, TimestampService.class);
-    }
-
-    private static TimestampManagementService getTimestampManagementService(String client) {
-        return getProxyForService(client, TimestampManagementService.class);
-    }
-
-    private static <T> T getProxyForService(String client, Class<T> clazz) {
-        return AtlasDbHttpClients.createProxy(
-                NO_SSL,
-                getRootUriForClient(client),
-                clazz);
-    }
-
     private static <T> T createProxyForInternalNamespacedTestService(Class<T> clazz) {
         return AtlasDbHttpClients.createProxy(
-                NO_SSL,
+                Optional.absent(),
                 String.format("http://localhost:%d/%s/%s/%s",
-                        TIMELOCK_SERVER_HOLDER.getTimelockPort(),
+                        SERVER.serverHolder().getTimelockPort(),
                         PaxosTimeLockConstants.INTERNAL_NAMESPACE,
                         PaxosTimeLockConstants.CLIENT_PAXOS_NAMESPACE,
                         CLIENT),
                 clazz);
     }
 
-    private static String getRootUriForClient(String client) {
-        return String.format("http://localhost:%d/%s", TIMELOCK_SERVER_HOLDER.getTimelockPort(), client);
-    }
 }

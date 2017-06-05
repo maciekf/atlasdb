@@ -61,7 +61,6 @@ public class TestableTimelockServer {
 
     public void start() {
         serverHolder.start();
-        serverHolder.start();
     }
 
     public PingableLeader pingableLeader() {
